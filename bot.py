@@ -48,7 +48,7 @@ from schedualer import setup_scheduler
 # НАСТРОЙКИ
 # ----------------------------------------------------------------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8667127538:AAEo67QcgHc4YSldkIWusnnAyHuuZ5xfs34")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://example.com/webapp/")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://ssjsh.github.io/bubl-bot/")
 ADMIN_IDS = {
     int(x) for x in os.getenv("ADMIN_IDS", "5551915250").split(",") if x.strip().isdigit()
 }
