@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Бубль</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* ─── RESET ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ─── ТОКЕНЫ ─────────────────────────────────────────── */
+  :root {
+    --bg:      var(--tg-theme-bg-color, #f2f2f7);
+    --bg2:     var(--tg-theme-secondary-bg-color, #ffffff);
+    --text:    var(--tg-theme-text-color, #1c1c1e);
+    --sub:     var(--tg-theme-hint-color, #8e8e93);
+    --sep:     rgba(60,60,67,.12);
+    --accent:  #007aff;
+    --red:     #ff3b30;
+    --green:   #34c759;
+    --orange:  #ff9500;
+    --purple:  #af52de;
+    --teal:    #5ac8fa;
+    --pink:    #ff2d55;
+
+    --tab-h:   calc(52px + env(safe-area-inset-bottom));
+    --radius:  18px;
+    --sf:      -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  }
+
+  /* dark-mode тоже работает через Telegram */
+  @media (prefers-color-scheme: dark) {
+    :root { --sep: rgba(255,255,255,.10); }
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sf);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+
+  /* ─── LAYOUT ─────────────────────────────────────────── */
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--tab-h);
+  }
+
+  /* ─── HERO ───────────────────────────────────────────── */
+  .hero {
+    padding: 32px 20px 20px;
+    text-align: center;
+  }
+
+  .mascot-wrap {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 14px;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .mascot-wrap svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    animation: float 5s ease-in-out infinite;
+    filter: drop-shadow(0 12px 24px rgba(0,122,255,.22));
+    transition: filter .4s ease;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%       { transform: translateY(-6px) rotate(-1deg); }
+  }
+
+  .mascot-wrap.tap svg {
+    animation: tap-squish .45s cubic-bezier(.25,1.5,.5,1);
+  }
+  @keyframes tap-squish {
+    0%  { transform: scale(1); }
+    30% { transform: scale(1.15,.88); }
+    60% { transform: scale(.93,1.08); }
+    100%{ transform: scale(1); }
+  }
+
+  .blob-fill { fill: var(--accent); transition: fill .5s ease; }
+  .blob-shine { fill: rgba(255,255,255,.22); }
+  .blob-eye { fill: rgba(255,255,255,.95); }
+
+  .sparkle {
+    position: absolute;
+    font-size: 16px;
+    left: 50%; top: 50%;
+    pointer-events: none;
+    animation: spark .8s ease-out forwards;
+  }
+  @keyframes spark {
+    0%   { opacity: 1; transform: translate(-50%,-50%) scale(.4); }
+    100% { opacity: 0; transform: translate(var(--tx),var(--ty)) scale(1.3) rotate(30deg); }
+  }
+
+  .hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -.4px;
+    margin-bottom: 4px;
+  }
+  .hero-sub {
+    font-size: 14px;
+    color: var(--sub);
+    line-height: 1.4;
+    min-height: 20px;
+    transition: opacity .2s;
+  }
+
+  /* ─── КОНТЕНТ-ЗОНА ───────────────────────────────────── */
+  .content {
+    flex: 1;
+    padding: 0 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .pane { display: flex; flex-direction: column; gap: 12px; }
+  .pane[hidden] { display: none; }
+
+  /* ─── GROUPED TABLE (стиль Settings iOS) ────────────── */
+  .group {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .group-header {
+    padding: 0 16px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--sub);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+    font-family: var(--sf);
+    -webkit-tap-highlight-color: transparent;
+    transition: background .15s;
+  }
+  .row:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 58px; right: 0;
+    height: 1px;
+    background: var(--sep);
+  }
+  .row:active { background: var(--sep); }
+
+  .row-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+
+  .row-label {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .row-chevron {
+    color: var(--sep);
+    font-size: 18px;
+    font-weight: 300;
+  }
+
+  /* иконки разных цветов */
+  .ic-blue   { background: var(--accent); }
+  .ic-red    { background: var(--red); }
+  .ic-orange { background: var(--orange); }
+  .ic-green  { background: var(--green); }
+  .ic-purple { background: var(--purple); }
+  .ic-teal   { background: var(--teal); }
+  .ic-pink   { background: var(--pink); }
+  .ic-grape  { background: #8b5cf6; }
+
+  /* кнопка-сюрприз — выделенная */
+  .surprise-row {
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    border: none;
+    width: 100%;
+    font-family: var(--sf);
+  }
+  .surprise-row:active { opacity: .85; }
+  .surprise-row .row-icon { background: rgba(255,255,255,.22); }
+  .surprise-row .row-label { color: #fff; font-size: 17px; font-weight: 600; }
+  .surprise-row .row-sub { color: rgba(255,255,255,.72); font-size: 13px; }
+
+  /* ─── RESULT CARD ────────────────────────────────────── */
+  .result-wrap { display: flex; flex-direction: column; gap: 10px; }
+
+  .result-card {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+  }
+  .result-card.pop { animation: pop .3s cubic-bezier(.26,1.4,.5,1); }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(.93) translateY(6px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .placeholder { font-size: 14px; color: var(--sub); line-height: 1.6; }
+
+  .result-card img, .result-card video {
+    width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+  .result-text {
+    font-size: 15px;
+    line-height: 1.65;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 12px;
+  }
+
+  /* SF-style таблетки */
+  .pill {
+    border: none;
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--sf);
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .pill:active { opacity: .7; }
+  .pill-primary { background: var(--accent); color: #fff; }
+  .pill-ghost   { background: var(--sep); color: var(--text); }
+
+  /* спиннер */
+  .spinner {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 3px solid var(--sep);
+    border-top-color: var(--accent);
+    animation: spin .75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── MOOD ───────────────────────────────────────────── */
+  .mood-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .mood-btn {
+    border: none;
+    border-radius: 14px;
+    background: var(--bg2);
+    font-size: 26px;
+    padding: 14px 0;
+    cursor: pointer;
+    transition: background .15s, transform .12s;
+  }
+  .mood-btn:active { transform: scale(.9); }
+  .mood-btn.active { background: color-mix(in srgb, var(--accent) 18%, var(--bg2)); }
+
+  /* ─── ГОРОСКОП ───────────────────────────────────────── */
+  .zodiac-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .zodiac-btn {
+    border: none;
+    border-radius: 14px;
+    background: var(--bg2);
+    padding: 10px 4px;
+    text-align: center;
+    font-size: 20px;
+    cursor: pointer;
+    transition: background .15s, transform .12s;
+  }
+  .zodiac-btn span {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    margin-top: 3px;
+    color: var(--sub);
+    letter-spacing: .02em;
+  }
+  .zodiac-btn:active { transform: scale(.92); }
+  .zodiac-btn.active { background: color-mix(in srgb, var(--purple) 18%, var(--bg2)); }
+
+  /* ─── ИГРЫ ───────────────────────────────────────────── */
+  .game-section {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 14px 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .game-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--sub);
+    margin-bottom: 2px;
+  }
+  .game-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .game-btns button {
+    flex: 1;
+    min-width: 46px;
+    border: none;
+    border-radius: 12px;
+    background: var(--bg);
+    padding: 11px 6px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--sf);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .game-btns button:active { opacity: .6; }
+  .game-result {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    min-height: 20px;
+    line-height: 1.5;
+  }
+  .quiz-q {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+  }
+  .quiz-opts {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .quiz-opts button {
+    border: none;
+    border-radius: 12px;
+    background: var(--bg);
+    padding: 11px 14px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: var(--sf);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .quiz-opts button:active { opacity: .65; }
+  .quiz-opts button.correct { background: color-mix(in srgb, var(--green) 22%, var(--bg2)); }
+  .quiz-opts button.wrong   { background: color-mix(in srgb, var(--red) 18%, var(--bg2)); }
+
+  /* ─── TAB BAR ────────────────────────────────────────── */
+  .tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    max-width: 480px;
+    margin: 0 auto;
+    height: var(--tab-h);
+    background: rgba(249,249,249,.88);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--sep);
+    display: flex;
+    align-items: flex-start;
+    padding-top: 8px;
+  }
+
+  .tab {
+    flex: 1;
+    border: none;
+    background: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--sf);
+    cursor: pointer;
+    padding: 0 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab-icon { font-size: 24px; line-height: 1; transition: transform .15s; }
+  .tab-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--sub);
+    letter-spacing: .02em;
+  }
+  .tab.active .tab-icon { transform: scale(1.06); }
+  .tab.active .tab-label { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ─── HERO ──────────────────────────────────────────── -->
+  <header class="hero">
+    <div class="mascot-wrap" id="mascot">
+      <svg viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- тело -->
+        <path class="blob-fill" d="M80 10
+          C112 8 148 30 154 68
+          C160 108 142 150 100 158
+          C60 166 18 148 8 108
+          C-2 70 12 28 46 14
+          C57 9 67 11 80 10Z"/>
+        <!-- блик -->
+        <ellipse class="blob-shine" cx="58" cy="42" rx="18" ry="12" transform="rotate(-20 58 42)"/>
+        <!-- левый глаз -->
+        <ellipse class="blob-eye" cx="62" cy="76" rx="11" ry="13"/>
+        <ellipse fill="#1c1c1e" cx="64" cy="74" rx="5" ry="6"/>
+        <ellipse fill="white" cx="66" cy="71" rx="2" ry="2.5"/>
+        <!-- правый глаз -->
+        <ellipse class="blob-eye" cx="98" cy="76" rx="11" ry="13"/>
+        <ellipse fill="#1c1c1e" cx="100" cy="74" rx="5" ry="6"/>
+        <ellipse fill="white" cx="102" cy="71" rx="2" ry="2.5"/>
+        <!-- рот -->
+        <path id="mouth" d="M67 104 Q80 118 93 104" stroke="#1c1c1e" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <!-- румянец -->
+        <ellipse fill="rgba(255,255,255,.2)" cx="46" cy="100" rx="10" ry="6"/>
+        <ellipse fill="rgba(255,255,255,.2)" cx="114" cy="100" rx="10" ry="6"/>
+      </svg>
+      <div id="sparks"></div>
+    </div>
+    <h1 class="hero-title" id="hero-title">Привет, я Бубль</h1>
+    <p class="hero-sub" id="hero-sub">Тапни меня — или выбери раздел</p>
+  </header>
+
+  <!-- ─── CONTENT ───────────────────────────────────────── -->
+  <main class="content">
+
+    <!-- КОНТЕНТ -->
+    <section class="pane" data-pane="content">
+      <div class="group-header">Что принести?</div>
+      <div class="group">
+        <button class="row" data-cat="cat">
+          <span class="row-icon ic-orange">🐱</span>
+          <span class="row-label">Котик</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="dog">
+          <span class="row-icon ic-red">🐶</span>
+          <span class="row-label">Песик</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="meme">
+          <span class="row-icon ic-purple">😂</span>
+          <span class="row-label">Мем</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="gif">
+          <span class="row-icon ic-teal">🎞</span>
+          <span class="row-label">Гифка</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="joke">
+          <span class="row-icon ic-orange">🃏</span>
+          <span class="row-label">Анекдот</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="quote">
+          <span class="row-icon ic-green">💬</span>
+          <span class="row-label">Цитата дня</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="fact">
+          <span class="row-icon ic-blue">🧠</span>
+          <span class="row-label">Интересный факт</span>
+          <span class="row-chevron">›</span>
+        </button>
+        <button class="row" data-cat="warm">
+          <span class="row-icon ic-pink">💌</span>
+          <span class="row-label">Тёплые слова</span>
+          <span class="row-chevron">›</span>
+        </button>
+      </div>
+
+      <button class="surprise-row" data-cat="surprise">
+        <span class="row-icon">🎲</span>
+        <span>
+          <div class="row-label">Сюрприз!</div>
+          <div class="row-sub">Бубль сам выберет что-нибудь</div>
+        </span>
+      </button>
+
+      <div class="result-wrap">
+        <div class="result-card" id="content-card">
+          <p class="placeholder">Выбери что-нибудь выше 👆</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- НАСТРОЕНИЕ -->
+    <section class="pane" data-pane="mood" hidden>
+      <div class="group-header">Как ты сейчас?</div>
+      <div class="mood-grid">
+        <button class="mood-btn" data-mood="happy">😄</button>
+        <button class="mood-btn" data-mood="sad">😢</button>
+        <button class="mood-btn" data-mood="angry">😡</button>
+        <button class="mood-btn" data-mood="tired">🥱</button>
+        <button class="mood-btn" data-mood="bored">🥳</button>
+      </div>
+      <div class="result-card" id="mood-card">
+        <p class="placeholder">Нажми смайлик выше 👆</p>
+      </div>
+    </section>
+
+    <!-- ГОРОСКОП -->
+    <section class="pane" data-pane="zodiac" hidden>
+      <div class="group-header">Знак зодиака</div>
+      <div class="zodiac-grid">
+        <button class="zodiac-btn" data-sign="aries">♈<span>Овен</span></button>
+        <button class="zodiac-btn" data-sign="taurus">♉<span>Телец</span></button>
+        <button class="zodiac-btn" data-sign="gemini">♊<span>Близн.</span></button>
+        <button class="zodiac-btn" data-sign="cancer">♋<span>Рак</span></button>
+        <button class="zodiac-btn" data-sign="leo">♌<span>Лев</span></button>
+        <button class="zodiac-btn" data-sign="virgo">♍<span>Дева</span></button>
+        <button class="zodiac-btn" data-sign="libra">♎<span>Весы</span></button>
+        <button class="zodiac-btn" data-sign="scorpio">♏<span>Скорп.</span></button>
+        <button class="zodiac-btn" data-sign="sagittarius">♐<span>Стрел.</span></button>
+        <button class="zodiac-btn" data-sign="capricorn">♑<span>Козер.</span></button>
+        <button class="zodiac-btn" data-sign="aquarius">♒<span>Водол.</span></button>
+        <button class="zodiac-btn" data-sign="pisces">♓<span>Рыбы</span></button>
+      </div>
+      <div class="result-card" id="zodiac-card">
+        <p class="placeholder">Выбери знак — узнаешь предсказание</p>
+      </div>
+    </section>
+
+    <!-- ИГРЫ -->
+    <section class="pane" data-pane="games" hidden>
+
+      <div class="game-section">
+        <div class="game-title">✊✋✌️  Камень-ножницы-бумага</div>
+        <div class="game-btns">
+          <button data-rps="rock">🪨 Камень</button>
+          <button data-rps="scissors">✂️ Ножницы</button>
+          <button data-rps="paper">📄 Бумага</button>
+        </div>
+        <div class="game-result" id="rps-res"></div>
+      </div>
+
+      <div class="game-section">
+        <div class="game-title">🔢  Угадай число от 1 до 10</div>
+        <div class="game-btns">
+          <button data-guess="1">1</button><button data-guess="2">2</button>
+          <button data-guess="3">3</button><button data-guess="4">4</button>
+          <button data-guess="5">5</button><button data-guess="6">6</button>
+          <button data-guess="7">7</button><button data-guess="8">8</button>
+          <button data-guess="9">9</button><button data-guess="10">10</button>
+        </div>
+        <div class="game-result" id="guess-res">Я загадал число. Угадывай!</div>
+      </div>
+
+      <div class="game-section">
+        <div class="game-title">🧠  Викторина</div>
+        <div class="quiz-q" id="quiz-q"></div>
+        <div class="quiz-opts" id="quiz-opts"></div>
+        <div class="game-result" id="quiz-res"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ─── TAB BAR ───────────────────────────────────────── -->
+  <nav class="tabbar">
+    <button class="tab active" data-tab="content">
+      <span class="tab-icon">🎁</span>
+      <span class="tab-label">Контент</span>
+    </button>
+    <button class="tab" data-tab="mood">
+      <span class="tab-icon">😊</span>
+      <span class="tab-label">Настроение</span>
+    </button>
+    <button class="tab" data-tab="zodiac">
+      <span class="tab-icon">🔮</span>
+      <span class="tab-label">Гороскоп</span>
+    </button>
+    <button class="tab" data-tab="games">
+      <span class="tab-icon">🎮</span>
+      <span class="tab-label">Игры</span>
+    </button>
+  </nav>
+
+</div>
+<script>
+/* ─────────────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────────────── */
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+/* ─────────────────────────────────────────────────────────
+   ДАННЫЕ
+───────────────────────────────────────────────────────── */
+const JOKES = [
+  "— Как дела?\n— Как в Excel: то всё считается, то ВСЁ ЛОМАЕТСЯ.",
+  "Сегодня тоже буду откладывать дела на завтра — традиции важны.",
+  "Кофе утром — это не зависимость, это техническое обслуживание.",
+  "Самая честная фраза: «Сейчас досмотрю это видео и сразу лягу спать».",
+  "Понедельник — это когда организм говорит: «А может, не надо?»",
+  "Лучшая тренировка — это бег мыслей перед сном.",
+  "Хотела начать день с продуктивности, но день начался с меня."
+];
+const QUOTES = [
+  "Не обязательно видеть всю лестницу, чтобы сделать первый шаг.",
+  "Лучшее время для начала — не «когда-нибудь», а «сегодня, но попозже».",
+  "Маленькая привычка, повторённая сто раз, сильнее большого порыва на один день.",
+  "Иногда самый продуктивный поступок — это честно признать, что нужен отдых.",
+  "Сравнение с другими — плохой компас. Сравнивай себя с собой вчерашней.",
+  "Хорошие дни не случаются сами — но не требуют подвига, чтобы случиться."
+];
+const FACTS = [
+  "Осьминоги имеют три сердца и голубую кровь.",
+  "Мёд может храниться тысячелетиями и не портится при правильном хранении.",
+  "Бананы технически — это ягоды, а клубника — нет.",
+  "У жирафов и людей одинаковое количество шейных позвонков — по семь.",
+  "Сердце синего кита размером с небольшой автомобиль.",
+  "Морские выдры спят, держась за лапки, чтобы не унесло течением."
+];
+const WARM = [
+  "Просто напоминаю: ты справляешься лучше, чем тебе кажется 🌷",
+  "Сделай сегодня что-нибудь маленькое и приятное для себя — ты заслуживаешь 💛",
+  "Даже самые скучные дни проходят. А ты — классная, помни это ✨",
+  "Если сейчас грустно — это нормально. Можно просто посидеть и подышать 🍃",
+  "Ты не обязана быть продуктивной каждую минуту. Отдых — это тоже важно 🌙",
+  "Маленький совет: налей себе чай и устрой 10 минут ничегонеделания ☕",
+  "Ты сегодня уже молодец — хотя бы потому, что дочитала это 🤍"
+];
+const HORO = [
+  "Сегодня звёзды советуют побаловать себя чем-нибудь {thing}.",
+  "День подходит для {action}. Не торопись — всё успеешь.",
+  "Возможна неожиданная хорошая новость — держи телефон рядом.",
+  "Кто-то сегодня подумает о тебе с теплом. Возможно, ты сама.",
+  "Звёзды рекомендуют сменить обстановку — даже просто пересесть на другое место.",
+  "Энергии хватит на одно важное дело и одно приятное. Выбирай по настроению."
+];
+const HORO_THINGS  = ["вкусным","тёплым","уютным","новым","сладким","красивым"];
+const HORO_ACTS    = ["новых начинаний","наведения порядка","разговора по душам","прогулки без цели","маленьких покупок для себя"];
+const ZODIAC_NAMES = {
+  aries:"♈ Овен", taurus:"♉ Телец", gemini:"♊ Близнецы", cancer:"♋ Рак",
+  leo:"♌ Лев", virgo:"♍ Дева", libra:"♎ Весы", scorpio:"♏ Скорпион",
+  sagittarius:"♐ Стрелец", capricorn:"♑ Козерог", aquarius:"♒ Водолей", pisces:"♓ Рыбы"
+};
+const GIF_CATS = ["hug","pat","wave","cuddle","poke","tickle","smile","wink","dance"];
+const ALL_CATS = ["cat","dog","meme","gif","joke","quote","fact","warm"];
+
+const MOOD_MAP = {
+  happy: { emoji:"😄", text:"Отлично! Продолжаем в том же духе", cat:"meme" },
+  sad:   { emoji:"😢", text:"Хочу немного тебя поддержать",       cat:"warm" },
+  angry: { emoji:"😡", text:"Кажется, нужна разрядка",             cat:"meme" },
+  tired: { emoji:"🥱", text:"Вот что-то спокойное",                cat:"quote" },
+  bored: { emoji:"🥳", text:"Сейчас разгоним скуку!",              cat:"surprise" },
+};
+
+const CAT_STYLE = {
+  cat:   { color:"#ff9500", sub:"Мяу! Вот тебе котик 🐱" },
+  dog:   { color:"#ff3b30", sub:"Гав! Лови пёсика 🐶" },
+  meme:  { color:"#af52de", sub:"Свежий мем подоспел 😂" },
+  gif:   { color:"#5ac8fa", sub:"Гифка-реакция для тебя 🎞" },
+  joke:  { color:"#ff9500", sub:"Вот анекдот 🃏" },
+  quote: { color:"#34c759", sub:"Мысль дня 💬" },
+  fact:  { color:"#007aff", sub:"А ты знала? 🧠" },
+  warm:  { color:"#ff2d55", sub:"Это для тебя 💌" },
+};
+
+/* ─────────────────────────────────────────────────────────
+   МАСКОТ
+───────────────────────────────────────────────────────── */
+const mascot   = document.getElementById('mascot');
+const blobFill = document.querySelector('.blob-fill');
+const heroSub  = document.getElementById('hero-sub');
+const sparks   = document.getElementById('sparks');
+
+function setBlobColor(hex) {
+  blobFill.style.fill = hex;
+}
+
+function squishMascot() {
+  mascot.classList.remove('tap');
+  void mascot.offsetWidth;
+  mascot.classList.add('tap');
+}
+
+function burstSparks() {
+  const icons = ['✨','💫','⭐','🎉','💥'];
+  for (let i = 0; i < 7; i++) {
+    const s = document.createElement('span');
+    s.className = 'sparkle';
+    s.textContent = icons[Math.floor(Math.random() * icons.length)];
+    const angle = (Math.PI * 2 * i) / 7 + Math.random() * .4;
+    const dist  = 55 + Math.random() * 25;
+    s.style.setProperty('--tx', `${Math.cos(angle)*dist}px`);
+    s.style.setProperty('--ty', `${Math.sin(angle)*dist}px`);
+    sparks.appendChild(s);
+    setTimeout(() => s.remove(), 850);
+  }
+}
+
+function reactTo(cat) {
+  const st = CAT_STYLE[cat];
+  if (!st) return;
+  setBlobColor(st.color);
+  heroSub.style.opacity = 0;
+  setTimeout(() => { heroSub.textContent = st.sub; heroSub.style.opacity = 1; }, 180);
+}
+
+mascot.addEventListener('click', () => {
+  tg?.HapticFeedback?.impactOccurred('medium');
+  squishMascot();
+  burstSparks();
+  deliverTo('surprise', document.getElementById('content-card'));
+  switchTab('content');
+});
+
+/* ─────────────────────────────────────────────────────────
+   ВКЛАДКИ
+───────────────────────────────────────────────────────── */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.hidden = (p.dataset.pane !== name));
+}
+document.querySelectorAll('.tab').forEach(b => {
+  b.addEventListener('click', () => {
+    tg?.HapticFeedback?.selectionChanged?.();
+    switchTab(b.dataset.tab);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   КАРТОЧКА РЕЗУЛЬТАТА
+───────────────────────────────────────────────────────── */
+function popCard(card) {
+  card.classList.remove('pop');
+  void card.offsetWidth;
+  card.classList.add('pop');
+}
+
+function showSpinner(card) { card.innerHTML = '<div class="spinner"></div>'; }
+
+function showImg(card, url, caption, cat) {
+  card.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = url; img.alt = '';
+  card.appendChild(img);
+  const t = document.createElement('div');
+  t.className = 'result-text'; t.textContent = caption;
+  card.appendChild(t);
+  appendActions(card, cat);
+  popCard(card);
+}
+
+function showTxt(card, text, cat) {
+  card.innerHTML = `<div class="result-text">${text.replace(/\n/g,'<br>')}</div>`;
+  if (cat) appendActions(card, cat);
+  popCard(card);
+}
+
+function showErr(card, retryFn) {
+  card.innerHTML = `<div class="result-text">Что-то пошло не так 🙈</div>`;
+  const acts = document.createElement('div');
+  acts.className = 'result-actions';
+  const btn = document.createElement('button');
+  btn.className = 'pill pill-primary'; btn.textContent = '🔁 Ещё раз';
+  btn.onclick = retryFn;
+  acts.appendChild(btn);
+  card.appendChild(acts);
+  popCard(card);
+}
+
+function appendActions(card, cat) {
+  const acts = document.createElement('div');
+  acts.className = 'result-actions';
+  const btn = document.createElement('button');
+  btn.className = 'pill pill-primary'; btn.textContent = '🔁 Ещё';
+  btn.onclick = () => deliverTo(cat, card);
+  acts.appendChild(btn);
+  card.appendChild(acts);
+}
+
+/* ─────────────────────────────────────────────────────────
+   ЗАГРУЗКА КОНТЕНТА
+───────────────────────────────────────────────────────── */
+function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+async function deliverTo(cat, card) {
+  let resolved = cat === 'surprise' ? rnd(ALL_CATS) : cat;
+  reactTo(resolved);
+  squishMascot();
+  showSpinner(card);
+  try {
+    if (resolved === 'cat') {
+      const d = await fetch('https://api.thecatapi.com/v1/images/search').then(r=>r.json());
+      showImg(card, d[0].url, 'Мяу! 🐱', resolved);
+    } else if (resolved === 'dog') {
+      const d = await fetch('https://dog.ceo/api/breeds/image/random').then(r=>r.json());
+      showImg(card, d.message, 'Гав! 🐶', resolved);
+    } else if (resolved === 'meme') {
+      const d = await fetch('https://meme-api.com/gimme').then(r=>r.json());
+      showImg(card, d.url, d.title || 'Вот мем 😂', resolved);
+    } else if (resolved === 'gif') {
+      const g = rnd(GIF_CATS);
+      const d = await fetch(`https://nekos.best/api/v2/${g}`).then(r=>r.json());
+      showImg(card, d.results[0].url, `🎞 ${g}`, resolved);
+    } else if (resolved === 'joke')  { showTxt(card, rnd(JOKES), resolved); }
+      else if (resolved === 'quote') { showTxt(card, '💬 ' + rnd(QUOTES), resolved); }
+      else if (resolved === 'fact')  { showTxt(card, '🧠 ' + rnd(FACTS), resolved); }
+      else if (resolved === 'warm')  { showTxt(card, rnd(WARM), resolved); }
+  } catch { showErr(card, () => deliverTo(cat, card)); }
+}
+
+/* ─────────────────────────────────────────────────────────
+   КОНТЕНТ — кнопки списка
+───────────────────────────────────────────────────────── */
+document.querySelectorAll('.row[data-cat], .surprise-row[data-cat]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tg?.HapticFeedback?.impactOccurred('light');
+    const isSurprise = btn.dataset.cat === 'surprise';
+    if (isSurprise) burstSparks();
+    deliverTo(btn.dataset.cat, document.getElementById('content-card'));
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   НАСТРОЕНИЕ
+───────────────────────────────────────────────────────── */
+document.querySelectorAll('.mood-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tg?.HapticFeedback?.impactOccurred('light');
+    document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const m = MOOD_MAP[btn.dataset.mood];
+    const card = document.getElementById('mood-card');
+    showTxt(card, `${m.emoji} ${m.text}`);
+    setTimeout(() => deliverTo(m.cat, card), 450);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   ГОРОСКОП
+───────────────────────────────────────────────────────── */
+document.querySelectorAll('.zodiac-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tg?.HapticFeedback?.impactOccurred('light');
+    document.querySelectorAll('.zodiac-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setBlobColor('#af52de');
+    const sign = ZODIAC_NAMES[btn.dataset.sign];
+    const text = rnd(HORO)
+      .replace('{thing}', rnd(HORO_THINGS))
+      .replace('{action}', rnd(HORO_ACTS));
+    showTxt(document.getElementById('zodiac-card'), `${sign}\n\n${text}`);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   ИГРЫ — КНБ
+───────────────────────────────────────────────────────── */
+const RPS_L  = { rock:'🪨 Камень', scissors:'✂️ Ножницы', paper:'📄 Бумага' };
+const RPS_W  = { rock:'scissors', scissors:'paper', paper:'rock' };
+document.querySelectorAll('[data-rps]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tg?.HapticFeedback?.impactOccurred('light');
+    const user = btn.dataset.rps;
+    const keys = Object.keys(RPS_L);
+    const bot  = rnd(keys);
+    let res;
+    if (user === bot)          { res = 'Ничья! 🤝'; }
+    else if (RPS_W[user]===bot){ res = 'Ты победил! 🎉'; burstSparks(); }
+    else                       { res = 'Бот победил 😏'; }
+    document.getElementById('rps-res').innerHTML =
+      `Ты: ${RPS_L[user]}  ·  Бот: ${RPS_L[bot]}<br>${res}`;
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   ИГРЫ — Угадай число
+───────────────────────────────────────────────────────── */
+let guessN = Math.floor(Math.random()*10)+1;
+document.querySelectorAll('[data-guess]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    tg?.HapticFeedback?.impactOccurred('light');
+    const g = parseInt(btn.dataset.guess, 10);
+    const el = document.getElementById('guess-res');
+    if (g === guessN) {
+      el.textContent = `🎯 Угадал! Загадываю новое число...`;
+      burstSparks();
+      guessN = Math.floor(Math.random()*10)+1;
+    } else {
+      el.textContent = g < guessN ? 'Больше! Попробуй ещё 👆' : 'Меньше! Попробуй ещё 👇';
+    }
+  });
+});
+
+/* ─────────────────────────────────────────────────────────
+   ИГРЫ — Викторина
+───────────────────────────────────────────────────────── */
+const QUIZ = [
+  { q:"Сколько сердец у осьминога?",                     o:["1","2","3","4"],                                    a:2 },
+  { q:"Самая большая планета Солнечной системы?",         o:["Земля","Сатурн","Юпитер","Нептун"],                a:2 },
+  { q:"Сколько цветов в радуге?",                        o:["5","6","7","8"],                                    a:2 },
+  { q:"Какой металл жидкий при комнатной температуре?",  o:["Свинец","Ртуть","Олово","Цинк"],                   a:1 },
+  { q:"Сколько ног у пчелы?",                            o:["4","6","8","10"],                                   a:1 },
+  { q:"Самый большой океан?",                            o:["Атлантический","Индийский","Тихий","Сев. Ледовитый"],a:2 },
+];
+
+function loadQuiz() {
+  const item = rnd(QUIZ);
+  document.getElementById('quiz-q').textContent = item.q;
+  document.getElementById('quiz-res').textContent = '';
+  const opts = document.getElementById('quiz-opts');
+  opts.innerHTML = '';
+  item.o.forEach((opt, idx) => {
+    const b = document.createElement('button');
+    b.textContent = opt;
+    b.onclick = () => {
+      tg?.HapticFeedback?.impactOccurred('light');
+      [...opts.children].forEach(c => c.disabled = true);
+      if (idx === item.a) {
+        b.classList.add('correct');
+        document.getElementById('quiz-res').textContent = '✅ Верно!';
+        burstSparks();
+      } else {
+        b.classList.add('wrong');
+        opts.children[item.a].classList.add('correct');
+        document.getElementById('quiz-res').textContent = '❌ Не угадал — но это нормально!';
+      }
+      setTimeout(loadQuiz, 1500);
+    };
+    opts.appendChild(b);
+  });
+}
+loadQuiz();
+</script>
+</body>
+</html>
